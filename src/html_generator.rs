@@ -97,6 +97,9 @@ pub fn generate(parsedTags: HtmlBody) -> Result<String, Box<dyn Error>> {
                                                 .into(),
                                         );
                                     }
+                                    PhrasingHtmlContent::Break => {
+                                        parent_para_element.add_child(HtmlElement::new(HtmlTag::LineBreak).into());
+                                    }
                                 }
                             }
                             build_element.add_child(parent_para_element.into())
@@ -105,8 +108,18 @@ pub fn generate(parsedTags: HtmlBody) -> Result<String, Box<dyn Error>> {
                     }
                 }
             }
+            HtmlToken::BlockQuote(t) => {
+                todo!("generate correct blockquote encompassing paragraph")
+            }
             HtmlToken::Article(_) => {
                 unimplemented!("shouldn't happen yet");
+            }
+            HtmlToken::Pre(t) => {
+                build_element.add_child(
+                    HtmlElement::new(HtmlTag::PreformattedText)
+                        .with_child(str::from_utf8(&t)?.into())
+                        .into(),
+                );
             }
         }
     }

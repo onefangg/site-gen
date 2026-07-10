@@ -1,4 +1,4 @@
-use crate::token::{HeaderToken, Token};
+use crate::token::{MarkdownHeaderToken, MarkdownToken};
 
 pub struct Lexer {
     input: Vec<u8>,
@@ -35,11 +35,11 @@ impl Lexer {
         }
     }
 
-    fn peek_ahead(&self, peek_ahead: usize) -> Option<Vec<u8>> {
+    fn peek_ahead(&self, peek_ahead: usize) -> Option<u8> {
         if self.position + peek_ahead >= self.input.len() {
             None
         } else {
-            Some(self.input[(self.position + 1)..(self.position + peek_ahead + 1)].to_vec())
+            Some(self.input[(self.position + peek_ahead)])
         }
     }
 
@@ -82,9 +82,9 @@ impl Lexer {
     }
 }
 
-pub fn tokenize(input: Vec<u8>) -> Vec<Token> {
+pub fn tokenize(input: Vec<u8>) -> Vec<MarkdownToken> {
     let mut lexer = Lexer::new(input);
-    let mut tokens: Vec<Token> = Vec::new();
+    let mut tokens: Vec<MarkdownToken> = Vec::new();
 
     loop {
         match lexer.current() {
@@ -96,69 +96,67 @@ pub fn tokenize(input: Vec<u8>) -> Vec<Token> {
                 if let Some(header_ok) = header_count {
                     lexer.advance();
                     let read_header = lexer.read_text();
-                    // this may or may not sit here
                     match header_ok {
-                        1 => tokens.push(Token::Header(HeaderToken::Header1(read_header))),
-                        2 => tokens.push(Token::Header(HeaderToken::Header2(read_header))),
-                        3 => tokens.push(Token::Header(HeaderToken::Header3(read_header))),
-                        4 => tokens.push(Token::Header(HeaderToken::Header4(read_header))),
-                        5 => tokens.push(Token::Header(HeaderToken::Header5(read_header))),
-                        6 => tokens.push(Token::Header(HeaderToken::Header6(read_header))),
+                        1 => tokens.push(MarkdownToken::Header(MarkdownHeaderToken::Header1(read_header))),
+                        2 => tokens.push(MarkdownToken::Header(MarkdownHeaderToken::Header2(read_header))),
+                        3 => tokens.push(MarkdownToken::Header(MarkdownHeaderToken::Header3(read_header))),
+                        4 => tokens.push(MarkdownToken::Header(MarkdownHeaderToken::Header4(read_header))),
+                        5 => tokens.push(MarkdownToken::Header(MarkdownHeaderToken::Header5(read_header))),
+                        6 => tokens.push(MarkdownToken::Header(MarkdownHeaderToken::Header6(read_header))),
                         _ => panic!(">7 # not allowed for headers"),
                     }
                 } else {
-                    tokens.push(Token::PlainText(b'#'));
+                    tokens.push(MarkdownToken::PlainText(b'#'));
                 }
                 lexer.advance();
             }
             Some(b'`') => {
-                tokens.push(Token::Code);
+                tokens.push(MarkdownToken::Code);
                 lexer.advance();
             }
-            // not handling the case where two or more spaces are treated as a new line
+            // not handling the case (yet) where two or more spaces are treated as a new line
             Some(b'\n') | Some(b'\r') => {
-                tokens.push(Token::Newline);
+                tokens.push(MarkdownToken::Newline);
                 lexer.advance();
             }
             Some(b'>') => {
-                tokens.push(Token::BlockQuote);
+                tokens.push(MarkdownToken::BlockQuote);
                 lexer.advance();
             }
             Some(b'*') => {
-                tokens.push(Token::Asterik);
+                tokens.push(MarkdownToken::Asterik);
                 lexer.advance();
             }
             Some(b'\t') => {
-                tokens.push(Token::Tab);
+                tokens.push(MarkdownToken::Tab);
                 lexer.advance();
             }
-            Some(b'-') | Some(b'+') => {
-                tokens.push(Token::UnorderedList);
+            Some(b'-') => {
+                tokens.push(MarkdownToken::Dash);
                 lexer.advance();
             }
             Some(b'[') => {
-                tokens.push(Token::SquareBracketOpen);
+                tokens.push(MarkdownToken::SquareBracketOpen);
                 lexer.advance();
             }
             Some(b']') => {
-                tokens.push(Token::SquareBracketClose);
+                tokens.push(MarkdownToken::SquareBracketClose);
                 lexer.advance();
             }
             Some(b'(') => {
-                tokens.push(Token::CurveBracketOpen);
+                tokens.push(MarkdownToken::CurveBracketOpen);
                 lexer.advance();
             }
             Some(b')') => {
-                tokens.push(Token::CurveBracketClose);
+                tokens.push(MarkdownToken::CurveBracketClose);
                 lexer.advance();
             }
             Some(i @ b'0'..=b'9') => {
-                // most :/ implementation, handwavy probably doesnt work
-                tokens.push(Token::Number(i));
+                tokens.push(MarkdownToken::Number(i));
                 lexer.advance();
             }
             Some(x) => {
-                tokens.push(Token::PlainText(x));
+                tokens.push(MarkdownToken::PlainText(x));
                 lexer.advance();
             }
         }
@@ -182,12 +180,12 @@ mod tokenize_tests {
             .to_vec();
 
         let expected_output = vec![
-            Token::Header(HeaderToken::Header1("Header 1".into())),
-            Token::Header(HeaderToken::Header2("a".into())),
-            Token::Header(HeaderToken::Header3("bc".into())),
-            Token::Header(HeaderToken::Header4("d".into())),
-            Token::Header(HeaderToken::Header5("e".into())),
-            Token::Header(HeaderToken::Header6("6".into())),
+            MarkdownToken::Header(MarkdownHeaderToken::Header1("Header 1".into())),
+            MarkdownToken::Header(MarkdownHeaderToken::Header2("a".into())),
+            MarkdownToken::Header(MarkdownHeaderToken::Header3("bc".into())),
+            MarkdownToken::Header(MarkdownHeaderToken::Header4("d".into())),
+            MarkdownToken::Header(MarkdownHeaderToken::Header5("e".into())),
+            MarkdownToken::Header(MarkdownHeaderToken::Header6("6".into())),
         ];
         let tokens = tokenize(input);
         assert_eq!(tokens.len(), 6);
@@ -201,10 +199,10 @@ mod tokenize_tests {
             .to_vec();
 
         let expected_output = vec![
-            Token::PlainText(b'#'),
-            Token::PlainText(b'H'),
-            Token::PlainText(b' '),
-            Token::Number(b'1'),
+            MarkdownToken::PlainText(b'#'),
+            MarkdownToken::PlainText(b'H'),
+            MarkdownToken::PlainText(b' '),
+            MarkdownToken::Number(b'1'),
         ];
         let tokens = tokenize(input);
         assert_eq!(tokens.len(), 4);
