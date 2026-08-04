@@ -1,0 +1,96 @@
+header {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    font-size: clamp(0.9rem, 1.2vw, 1.2rem);
+}
+
+header h1 {
+    font-size: clamp(1.8rem, 3vw, 2.5rem);
+}
+
+header a {
+    text-decoration: underline;
+    font-weight: normal;
+}
+
+.navbar {
+    align-items: center;
+    margin: 0;
+    border-bottom: 1px solid grey;
+}
+
+.navbar ul {
+    display: flex;
+    flex-direction: row;
+    gap: 2%;
+}
+
+.navbar li {
+    list-style: none;
+    font-size: clamp(1.1rem, 1.5vw, 1.5rem);
+}
+
+body {
+    place-content: center;
+    min-height: 100vh;
+    display: grid;
+    font-size: clamp(1rem, 1.5vw, 2rem);
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr;
+    width: 100%;
+    padding: 0;
+    margin: 0 4px;
+}
+
+.navbar, header, article {
+    margin: 0 4px;
+    padding: 0;
+}
+
+header >* {
+    margin: 0.5rem 0;
+}
+
+@media (min-width: 768px) {
+    body {
+        padding: 0 2rem;
+        margin: 0 auto;
+        max-width: 70ch;
+    }
+}
+
+pre:has(.code-block) {
+    background-color: grey;
+}
+
+code {
+    background-color: grey;
+    color: whitesmoke;
+}
+
+.post-container {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+    margin: 2%
+}
+
+.post-link {
+    width: 100%;
+    text-decoration: none;
+    color: black;
+    display: flex;
+    gap: 4px;
+    flex-direction: column;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+.post-link > * {
+    margin: 0;
+}
+.post-link p {
+    color: lightslategrey;
+}

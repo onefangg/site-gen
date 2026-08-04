@@ -1,8 +1,8 @@
-use crate::token::HtmlToken::{BlockQuote, Paragraph, Pre};
+use crate::token::HtmlToken::{BlockQuote, Break, Paragraph, Pre};
+use crate::token::MarkdownToken::{Asterik, CodeBlock, PlainText, SquareBracketClose};
 use crate::token::PhrasingHtmlContent::{Code, Link, ParagraphPlainText};
-use crate::token::MarkdownToken::{Asterik, PlainText, SquareBracketClose};
-use crate::token::{MarkdownHeaderToken, HtmlToken, PhrasingHtmlContent, MarkdownToken};
-use build_html::Html;
+use crate::token::{HtmlToken, MarkdownHeaderToken, MarkdownToken, PhrasingHtmlContent};
+use MarkdownToken::Dash;
 
 #[derive(Debug)]
 pub struct HtmlParser {
@@ -121,7 +121,7 @@ impl HtmlParser {
                         loop {
                             match self.current() {
                                 None => break,
-                                Some(PlainText(x)) => {
+                                Some(PlainText(x)) | Some(MarkdownToken::Number(x))=> {
                                     link_url.push(*x);
                                     self.advance();
                                 }
@@ -166,7 +166,7 @@ impl HtmlParser {
                     html_value.push(ParagraphPlainText(pt));
                     self.advance();
                 }
-                Some(MarkdownToken::Code) => {
+                Some(MarkdownToken::BackTick) => {
                     let mut pt: Vec<u8> = vec![];
                     loop {
                         match self.peek() {
@@ -174,7 +174,7 @@ impl HtmlParser {
                                 pt.push(nc.to_owned());
                                 self.advance();
                             }
-                            Some(MarkdownToken::Code) => {
+                            Some(MarkdownToken::BackTick) => {
                                 self.advance();
                                 break;
                             }
@@ -188,9 +188,20 @@ impl HtmlParser {
                     let next = self.peek();
                     if let Some(val) = next {
                         if let Asterik = val {
-                            // bold case,
-                            // html_value.push(Strong(self.parse_text_until()));
-                        } else if let PlainText(x) = val {
+                            self.advance();
+                            self.advance();
+                            let text = self.parse_plain_text_until();
+
+                            if let Some(Asterik) = self.current() && let Some(Asterik) = self.peek() {
+                                html_value.push(PhrasingHtmlContent::Strong(text));
+                                self.advance();
+                            } else {
+                                let mut plain_text = vec![b'*'];
+                                plain_text.extend(text);
+                                html_value.push(ParagraphPlainText(plain_text));
+                            }
+                            self.advance()
+                        } else if let PlainText(_) = val {
                             self.advance();
                             let text = self.parse_plain_text_until();
 
@@ -243,69 +254,36 @@ impl HtmlParser {
                     }
                     self.advance();
                 }
-                Some(MarkdownToken::Code) => {
-                    if let Some(MarkdownToken::Code) = self.peek()
-                        && let Some(MarkdownToken::Code) = self.peek_ahead(2)
-                    {
-                        // multiline code block
-                        self.advance();
-                        self.advance();
-                        self.advance();
-
-                        let mut block: Vec<u8> = vec![];
-                        loop {
-                            match self.current() {
-                                None => break,
-                                Some(val) => {
-                                    let s = val.clone().into();
-                                    block.push(s);
-                                }
-                            }
-
-                            if let Some(MarkdownToken::Code) = self.peek()
-                                && let Some(MarkdownToken::Code) = self.peek_ahead(2)
-                            {
-                                html_value.push(Pre(block));
-                                self.advance();
-                                break;
-                            } else {
-                                self.advance()
-                            }
-                        }
-                    }
-                }
-                Some(PlainText(_)) | Some(MarkdownToken::Number(_)) | Some(Asterik) => {
-                    html_value.push(self.parse_paragraph());
-                    self.advance()
-                }
-                Some(MarkdownToken::BlockQuote) => {
+                Some(MarkdownToken::Newline) => {
+                    html_value.push(Break);
                     self.advance();
-                    let mut whole_text: Vec<u8> = vec![];
-
-                    loop {
-                        match self.current() {
-                            Some(MarkdownToken::BlockQuote) => {
-                                let text = self.parse_plain_text_until_specific_token(MarkdownToken::Newline);
-                                whole_text.extend(text);
-                                self.advance();
-                            }
-                            None | Some(_) => {
-                                break;
-                            }
-                        }
+                }
+                // throw away language marker for now
+                Some(MarkdownToken::MultilineCode(_)) => {
+                    self.advance();
+                    if let Some(CodeBlock(code)) = self.current() {
+                        html_value.push(Pre(Code(code.to_owned())));
+                        self.advance();
+                        self.advance();
                     }
-                    let paragraph = self.parse_paragraph();
-                    if let Some(content) = paragraph.get_paragraph_contents() {
+                    // else the initial lexing is wrong
+                }
+                Some(MarkdownToken::BlockQuote(_text)) => {
+                    // can't handle multiline blockquote
+                    let text = self.parse_paragraph();
+                    if let Some(content) = text.get_paragraph_contents() {
                         html_value.push(BlockQuote(content));
                     }
-                }
-                Some(MarkdownToken::Newline) => {
-                    // todo - do nothing but move on
                     self.advance();
+
+                }
+                Some(Dash) => {
+                    // create ul with li elements
+                    panic!("List not handled yet")
                 }
                 Some(_) => {
-                    println!("{:?}", self.current());
-                    panic!("NOT YET")
+                    html_value.push(self.parse_paragraph());
+                    self.advance();
                 }
             }
         }
@@ -316,19 +294,20 @@ impl HtmlParser {
 #[cfg(test)]
 mod markdown_parser_tests {
     use super::*;
+    use crate::token::MarkdownToken::{CodeBlock, MultilineCode, SquareBracketOpen};
     use crate::token::PhrasingHtmlContent::Italic;
-    use crate::token::MarkdownToken::{BlockQuote, SquareBracketOpen};
+    use MarkdownToken::{CurveBracketClose, CurveBracketOpen};
 
     #[test]
     fn test_parse_paragraph_for_link() {
         let mut parser = HtmlParser::new(vec![
-            MarkdownToken::SquareBracketOpen,
-            MarkdownToken::PlainText(b'a'),
-            MarkdownToken::SquareBracketClose,
-            MarkdownToken::CurveBracketOpen,
-            MarkdownToken::PlainText(b'h'),
-            MarkdownToken::PlainText(b't'),
-            MarkdownToken::CurveBracketClose,
+            SquareBracketOpen,
+            PlainText(b'a'),
+            SquareBracketClose,
+            CurveBracketOpen,
+            PlainText(b'h'),
+            PlainText(b't'),
+            CurveBracketClose,
         ]);
 
         let token = parser.parse_paragraph();
@@ -339,17 +318,33 @@ mod markdown_parser_tests {
     #[test]
     fn test_parse_paragraph_for_incorrect_link_as_plain_text() {
         let mut parser = HtmlParser::new(vec![
-            MarkdownToken::SquareBracketOpen,
-            MarkdownToken::PlainText(b'a'),
-            MarkdownToken::CurveBracketOpen,
-            MarkdownToken::PlainText(b'h'),
-            MarkdownToken::PlainText(b't'),
-            MarkdownToken::CurveBracketClose,
+            SquareBracketOpen,
+            PlainText(b'a'),
+            CurveBracketOpen,
+            PlainText(b'h'),
+            PlainText(b't'),
+            CurveBracketClose,
         ]);
 
         let token = parser.parse_paragraph();
         let expected_token =
             Paragraph(vec![ParagraphPlainText(vec![b'[', b'a', b'(', b'h', b't'])]);
+        assert_eq!(token, expected_token);
+    }
+
+
+    #[test]
+    fn test_parse_bold_correct() {
+        let mut parser = HtmlParser::new(vec![
+            Asterik,
+            Asterik,
+            PlainText(b'a'),
+            Asterik,
+            Asterik,
+        ]);
+        let token = parser.parse_paragraph();
+        let expected_token =
+            Paragraph(vec![PhrasingHtmlContent::Strong(vec![b'a'])]);
         assert_eq!(token, expected_token);
     }
 
@@ -398,67 +393,14 @@ mod markdown_parser_tests {
     #[test]
     fn test_multiline_code_block_correct() {
         let mut parser = HtmlParser::new(vec![
-            MarkdownToken::Code,
-            MarkdownToken::Code,
-            MarkdownToken::Code,
-            PlainText(b'd'),
-            PlainText(b'e'),
-            PlainText(b'f'),
-            MarkdownToken::CurveBracketOpen,
-            MarkdownToken::CurveBracketClose,
-            MarkdownToken::Tab,
-            PlainText(b'n'),
-            MarkdownToken::Code,
-            MarkdownToken::Code,
-            MarkdownToken::Code,
+            MultilineCode(vec![]),
+            CodeBlock(vec![b'd', b'(', b')', b'\t', b']']),
+            MultilineCode(vec![]),
         ]);
 
         let token = parser.parse();
-        let expected_token = vec![HtmlToken::Pre(vec![
-            b'd', b'e', b'f', b'(', b')', b'\t', b'n',
-        ])];
+        let expected_token = vec![HtmlToken::Pre(Code(vec![b'd', b'(', b')', b'\t', b']']))];
         assert_eq!(token, expected_token);
     }
 
-    #[test]
-    fn test_parse_block_quote_correct() {
-        let mut parser = HtmlParser::new(vec![
-            MarkdownToken::BlockQuote,
-            PlainText(b'h'),
-            PlainText(b'a'),
-            PlainText(b' '),
-            SquareBracketOpen,
-        ]);
-
-        let token = parser.parse();
-        let expected_token = vec![HtmlToken::BlockQuote(vec![
-            ParagraphPlainText(vec![b'h', b'a', b' ']),
-            ParagraphPlainText(vec![b'[']),
-        ])];
-        assert_eq!(token, expected_token);
-    }
-
-    #[test]
-    #[ignore = "Refactor first then deal with this"]
-    fn test_parse_multiline_block_quote_correct() {
-        let mut parser = HtmlParser::new(vec![
-            BlockQuote,
-            PlainText(b'h'),
-            PlainText(b'a'),
-            PlainText(b' '),
-            MarkdownToken::Newline,
-            BlockQuote,
-            PlainText(b'a'),
-            PlainText(b'b'),
-            PlainText(b'c'),
-        ]);
-
-        let token = parser.parse();
-        let expected_token = vec![HtmlToken::BlockQuote(vec![
-            ParagraphPlainText(vec![b'h', b'a', b' ']),
-            PhrasingHtmlContent::Break,
-            ParagraphPlainText(vec![b'a', b'b', b'c']),
-        ])];
-        assert_eq!(token, expected_token);
-    }
 }

@@ -1,3 +1,5 @@
+use chrono::{DateTime, Utc};
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum MarkdownHeaderToken {
     Header1(Vec<u8>),
@@ -12,8 +14,10 @@ pub enum MarkdownHeaderToken {
 pub enum MarkdownToken {
     Header(MarkdownHeaderToken),
     Newline,
-    Code,
-    BlockQuote,
+    BackTick,
+    MultilineCode(Vec<u8>),
+    CodeBlock(Vec<u8>),
+    BlockQuote(Vec<u8>),
     Asterik,
     PlainText(u8),
     SquareBracketOpen,
@@ -28,10 +32,10 @@ pub enum MarkdownToken {
 impl Into<u8> for MarkdownToken {
     fn into(self) -> u8 {
         match self {
-            MarkdownToken::Header(_) => b'#', // incorrect
+            MarkdownToken::Header(_) => b'#',
             MarkdownToken::Newline => b'\n',
-            MarkdownToken::Code => b'`',
-            MarkdownToken::BlockQuote => b'>',
+            MarkdownToken::BackTick => b'`',
+            MarkdownToken::BlockQuote(_) => b'>',
             MarkdownToken::Asterik => b'*',
             MarkdownToken::PlainText(x) => x,
             MarkdownToken::SquareBracketOpen => b'[',
@@ -41,8 +45,14 @@ impl Into<u8> for MarkdownToken {
             MarkdownToken::Number(x) => x,
             MarkdownToken::Dash => b'-',
             MarkdownToken::Tab => b'\t',
+            MarkdownToken::MultilineCode(_) | MarkdownToken::CodeBlock(_) => todo!(),
         }
     }
+}
+
+pub struct MarkdownInformation {
+    pub(crate) front_matter: Option<Vec<(String, String)>>,
+    pub(crate) tokens: Vec<MarkdownToken>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -63,7 +73,8 @@ pub enum HtmlToken {
     Heading4(Vec<u8>),
     Heading5(Vec<u8>),
     Heading6(Vec<u8>),
-    Pre(Vec<u8>),
+    Pre(PhrasingHtmlContent),
+    Break,
     Paragraph(Vec<PhrasingHtmlContent>),
     Article(Vec<HtmlToken>), // unused for now
     BlockQuote(Vec<PhrasingHtmlContent>),
@@ -78,6 +89,16 @@ impl HtmlToken {
     }
 }
 
-pub struct HtmlBody {
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BlogPost {
+    pub(crate) title: String,
+    pub(crate) date: DateTime<Utc>,
     pub(crate) children: Vec<HtmlToken>,
+}
+
+pub struct BlogPostMeta {
+    pub(crate) title: String,
+    pub(crate) date: DateTime<Utc>,
+    pub(crate) link: String,
 }
