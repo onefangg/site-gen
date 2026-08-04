@@ -1,0 +1,1 @@
+This is the source code for static site generation of my [blog](https://blog.onefangg.com)

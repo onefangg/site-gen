@@ -3,3 +3,4 @@
 **.md
 template/**.html
 *.html
+!README.md
