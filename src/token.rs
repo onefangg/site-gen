@@ -66,6 +66,12 @@ pub enum PhrasingHtmlContent {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct OrderedListItem {
+    pub(crate) order: u8,
+    pub(crate) content: Vec<PhrasingHtmlContent>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum HtmlToken {
     Heading1(Vec<u8>),
     Heading2(Vec<u8>),
@@ -78,6 +84,7 @@ pub enum HtmlToken {
     Paragraph(Vec<PhrasingHtmlContent>),
     Article(Vec<HtmlToken>), // unused for now
     BlockQuote(Vec<PhrasingHtmlContent>),
+    OrderedList(Vec<OrderedListItem>)
 }
 
 impl HtmlToken {

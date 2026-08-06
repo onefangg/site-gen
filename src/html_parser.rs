@@ -1,7 +1,9 @@
 use crate::token::HtmlToken::{BlockQuote, Break, Paragraph, Pre};
-use crate::token::MarkdownToken::{Asterik, CodeBlock, PlainText, SquareBracketClose};
+use crate::token::MarkdownToken::{Asterik, CodeBlock, Number, PlainText, SquareBracketClose};
 use crate::token::PhrasingHtmlContent::{Code, Link, ParagraphPlainText};
-use crate::token::{HtmlToken, MarkdownHeaderToken, MarkdownToken, PhrasingHtmlContent};
+use crate::token::{
+    HtmlToken, MarkdownHeaderToken, MarkdownToken, OrderedListItem, PhrasingHtmlContent,
+};
 use MarkdownToken::Dash;
 
 #[derive(Debug)]
@@ -121,7 +123,7 @@ impl HtmlParser {
                         loop {
                             match self.current() {
                                 None => break,
-                                Some(PlainText(x)) | Some(MarkdownToken::Number(x))=> {
+                                Some(PlainText(x)) | Some(MarkdownToken::Number(x)) => {
                                     link_url.push(*x);
                                     self.advance();
                                 }
@@ -150,7 +152,7 @@ impl HtmlParser {
                         }
                     }
                 }
-                Some(PlainText(c)) | Some(MarkdownToken::Number(c)) => {
+                Some(PlainText(c)) | Some(Number(c)) => {
                     let mut pt: Vec<u8> = vec![];
                     pt.push(*c);
 
@@ -192,7 +194,9 @@ impl HtmlParser {
                             self.advance();
                             let text = self.parse_plain_text_until();
 
-                            if let Some(Asterik) = self.current() && let Some(Asterik) = self.peek() {
+                            if let Some(Asterik) = self.current()
+                                && let Some(Asterik) = self.peek()
+                            {
                                 html_value.push(PhrasingHtmlContent::Strong(text));
                                 self.advance();
                             } else {
@@ -275,12 +279,38 @@ impl HtmlParser {
                         html_value.push(BlockQuote(content));
                     }
                     self.advance();
+                }
+                Some(Number(_)) => {
+                    // create ol with li elements
+                    let mut list_items: Vec<OrderedListItem> = vec![];
 
+                    loop {
+                        if let Some(Number(n)) = self.current() {
+                            // can't handle 2 digit :)
+                            let order = n.clone() - b'0';
+                            self.advance(); // skip the Number marker
+                            let get_text = self.parse_paragraph().get_paragraph_contents();
+                            if let Some(t) = get_text {
+                                list_items.push(OrderedListItem { order, content: t });
+                            } else {
+                                break;
+                            }
+
+                            self.advance();
+                            if let Some(Number(_)) = self.current() {
+                                continue;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    html_value.push(HtmlToken::OrderedList(list_items));
                 }
                 Some(Dash) => {
                     // create ul with li elements
                     panic!("List not handled yet")
                 }
+
                 Some(_) => {
                     html_value.push(self.parse_paragraph());
                     self.advance();
@@ -294,6 +324,7 @@ impl HtmlParser {
 #[cfg(test)]
 mod markdown_parser_tests {
     use super::*;
+    use crate::token::HtmlToken::OrderedList;
     use crate::token::MarkdownToken::{CodeBlock, MultilineCode, SquareBracketOpen};
     use crate::token::PhrasingHtmlContent::Italic;
     use MarkdownToken::{CurveBracketClose, CurveBracketOpen};
@@ -332,19 +363,11 @@ mod markdown_parser_tests {
         assert_eq!(token, expected_token);
     }
 
-
     #[test]
     fn test_parse_bold_correct() {
-        let mut parser = HtmlParser::new(vec![
-            Asterik,
-            Asterik,
-            PlainText(b'a'),
-            Asterik,
-            Asterik,
-        ]);
+        let mut parser = HtmlParser::new(vec![Asterik, Asterik, PlainText(b'a'), Asterik, Asterik]);
         let token = parser.parse_paragraph();
-        let expected_token =
-            Paragraph(vec![PhrasingHtmlContent::Strong(vec![b'a'])]);
+        let expected_token = Paragraph(vec![PhrasingHtmlContent::Strong(vec![b'a'])]);
         assert_eq!(token, expected_token);
     }
 
@@ -403,4 +426,27 @@ mod markdown_parser_tests {
         assert_eq!(token, expected_token);
     }
 
+    #[test]
+    fn test_ordered_list_correct() {
+        let mut parser = HtmlParser::new(vec![
+            Number(b'1'),
+            PlainText(b' '),
+            PlainText(b'h'),
+            MarkdownToken::Newline,
+            Number(b'2'),
+            PlainText(b'e'),
+        ]);
+        let token = parser.parse();
+        let expected_token = vec![OrderedList(vec![
+            OrderedListItem {
+                order: 1,
+                content: vec![ParagraphPlainText(vec![b' ', b'h'])],
+            },
+            OrderedListItem {
+                order: 2,
+                content: vec![ParagraphPlainText(vec![b'e'])],
+            },
+        ])];
+        assert_eq!(token, expected_token);
+    }
 }

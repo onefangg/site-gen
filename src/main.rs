@@ -10,7 +10,6 @@ use crate::token::{BlogPost, BlogPostMeta};
 use html_parser::HtmlParser;
 use std::error::Error;
 use std::fs;
-use chrono::Utc;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut meta: Vec<BlogPostMeta> = vec![];

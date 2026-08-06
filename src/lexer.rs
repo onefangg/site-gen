@@ -46,6 +46,16 @@ impl Lexer {
         }
     }
 
+    fn peek_back(&self, size: i32) -> Option<u8> {
+        let idx = self.position as i32 + size;
+
+        if self.position + idx as usize >= self.input.len() {
+            None
+        } else {
+            Some(self.input[idx as usize])
+        }
+    }
+
     fn read_text(&mut self) -> Vec<u8> {
         let mut text: Vec<u8> = Vec::new();
         loop {
@@ -234,8 +244,14 @@ pub fn tokenize(input: Vec<u8>) -> MarkdownInformation {
                 lexer.advance();
             }
             Some(i @ b'0'..=b'9') => {
-                tokens.push(MarkdownToken::Number(i));
-                lexer.advance();
+                if  lexer.peek() == Some(b'.') || lexer.peek() == Some(b')') {
+                    tokens.push(MarkdownToken::Number(i));
+                    lexer.advance();
+                    lexer.advance();
+                } else {
+                    tokens.push(PlainText(i));
+                    lexer.advance();
+                }
             }
             Some(x) => {
                 tokens.push(MarkdownToken::PlainText(x));
@@ -386,10 +402,22 @@ def("
             PlainText(b'#'),
             PlainText(b'H'),
             PlainText(b' '),
-            Number(b'1'),
+            PlainText(b'1'),
         ];
         let info = tokenize(input);
         assert_eq!(info.tokens.len(), 4);
+        assert_eq!(info.tokens, expected_output);
+    }
+
+    #[test]
+    fn tokenize_numbered_list() {
+        let input = "1. h\
+        2.e"
+        .as_bytes()
+        .to_vec();
+        let expected_output = vec![Number(b'1'), PlainText(b' '), PlainText(b'h'), Number(b'2'), PlainText(b'e')];
+        let info = tokenize(input);
+        assert_eq!(info.tokens.len(), 5);
         assert_eq!(info.tokens, expected_output);
     }
 }

@@ -159,6 +159,20 @@ fn generate_article(parsed_body: Vec<HtmlToken>) -> Result<HtmlElement, Box<dyn 
                 let parent = HtmlElement::new(HtmlTag::PreformattedText);
                 build_element.add_child(parse_format(parent, t)?.into());
             }
+            HtmlToken::OrderedList(list) => {
+                let mut parent_list = HtmlElement::new(HtmlTag::OrderedList);
+                for l in list {
+                    let mut list_item_ele =
+                        HtmlElement::new(HtmlTag::ListElement).with_attribute("value", l.order);
+                    let mut parent_para_element = HtmlElement::new(HtmlTag::ParagraphText);
+                    for ele in l.content {
+                        parent_para_element = parse_format(parent_para_element, ele)?;
+                    }
+                    list_item_ele.add_child(parent_para_element.into());
+                    parent_list = parent_list.with_child(list_item_ele.into());
+                }
+                build_element.add_child(parent_list.into())
+            }
             HtmlToken::Break | HtmlToken::Article(_) => {
                 // do nothing
             }
@@ -201,10 +215,7 @@ pub fn generate_home_page(posts: Vec<BlogPostMeta>) -> Result<String, Box<dyn Er
             .with_attribute("href", p.link)
             .with_attribute("class", "post-link")
             .with_child(
-                HtmlChild::Element(
-                    HtmlElement::new(HtmlTag::Heading1)
-                        .with_child(p.title.into()),
-                )
+                HtmlChild::Element(HtmlElement::new(HtmlTag::Heading1).with_child(p.title.into()))
                     .into(),
             )
             .with_child(
@@ -212,7 +223,7 @@ pub fn generate_home_page(posts: Vec<BlogPostMeta>) -> Result<String, Box<dyn Er
                     HtmlElement::new(HtmlTag::ParagraphText)
                         .with_child(p.date.format("%d %b %Y").to_string().into()),
                 )
-                    .into(),
+                .into(),
             );
         container = container.with_child(post_link.into());
     }
