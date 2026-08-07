@@ -9,12 +9,15 @@ use crate::lexer::tokenize;
 use crate::token::{BlogPost, BlogPostMeta};
 use html_parser::HtmlParser;
 use std::error::Error;
-use std::fs;
+use std::path::Path;
+use std::{cmp, fs};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut meta: Vec<BlogPostMeta> = vec![];
+    let mut blog_posts: Vec<BlogPost> = vec![];
+
     // generate page for each posts
-    for (i, e) in fs::read_dir("./template/posts")?.enumerate() {
+    for e in fs::read_dir("./template/posts")? {
         let file_path = e?.path();
         if file_path.is_file() {
             let file = fs::read(file_path)?;
@@ -27,13 +30,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                 date: fm.date.clone(),
                 children: val,
             };
-
-            let generated_html_body = generate_page(body)?;
-
-            let path = format!("post_{}.html", i);
-            fs::write(path.clone(), generated_html_body)?;
-            meta.push(BlogPostMeta {title: fm.title, date: fm.date, link: path});
+            blog_posts.push(body);
         }
+    }
+
+    let output_folder = Path::new("./output");
+    blog_posts.sort_by_key(|x| cmp::Reverse(x.date));
+    for (i, body) in blog_posts.iter().enumerate() {
+        let generated_html_body = generate_page(body.to_owned())?;
+        let path = format!("post_{}.html", i);
+        fs::write(output_folder.join(path.clone()), generated_html_body)?;
+        meta.push(BlogPostMeta {
+            title: body.title.to_string(),
+            date: body.date,
+            link: path,
+        });
     }
 
     // generate about page
@@ -42,10 +53,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut parser = HtmlParser::new(about_result.tokens);
     let val = parser.parse();
     let about_html_body = generate_about_page(val)?;
-    fs::write("about.html", about_html_body)?;
+    fs::write(output_folder.join("about.html"), about_html_body)?;
 
     // generate home page
     let index = generate_home_page(meta);
-    fs::write("index.html", index?)?;
+    fs::write(output_folder.join("index.html"), index?)?;
     Ok(())
 }

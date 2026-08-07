@@ -3,6 +3,7 @@ use crate::token::MarkdownToken::{Asterik, CodeBlock, Number, PlainText, SquareB
 use crate::token::PhrasingHtmlContent::{Code, Link, ParagraphPlainText};
 use crate::token::{
     HtmlToken, MarkdownHeaderToken, MarkdownToken, OrderedListItem, PhrasingHtmlContent,
+    UnorderedListItem,
 };
 use MarkdownToken::Dash;
 
@@ -223,6 +224,14 @@ impl HtmlParser {
                         self.advance()
                     }
                 }
+                Some(MarkdownToken::CurveBracketOpen) => {
+                    html_value.push(ParagraphPlainText(vec![b'(']));
+                    self.advance();
+                }
+                Some(MarkdownToken::CurveBracketClose) => {
+                    html_value.push(ParagraphPlainText(vec![b')']));
+                    self.advance();
+                }
                 Some(_) => break,
             }
         }
@@ -308,7 +317,33 @@ impl HtmlParser {
                 }
                 Some(Dash) => {
                     // create ul with li elements
-                    panic!("List not handled yet")
+                    let mut list_items: Vec<UnorderedListItem> = vec![];
+
+                    self.advance();
+
+                    loop {
+                        let get_text = self.parse_paragraph().get_paragraph_contents();
+                        if let Some(t) = get_text {
+                            list_items.push(UnorderedListItem {
+                                content: t,
+                                children: Box::new(vec![]),
+                            });
+                        } else {
+                            break;
+                        }
+                        self.advance();
+                        if let Some(MarkdownToken::Newline) = self.current() {
+                            self.advance();
+                        }
+                        if let Some(Dash) = self.current() {
+                            self.advance();
+                            continue;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    html_value.push(HtmlToken::UnorderedList(list_items));
                 }
 
                 Some(_) => {
@@ -324,8 +359,8 @@ impl HtmlParser {
 #[cfg(test)]
 mod markdown_parser_tests {
     use super::*;
-    use crate::token::HtmlToken::OrderedList;
-    use crate::token::MarkdownToken::{CodeBlock, MultilineCode, SquareBracketOpen};
+    use crate::token::HtmlToken::{OrderedList, UnorderedList};
+    use crate::token::MarkdownToken::{CodeBlock, MultilineCode, Newline, SquareBracketOpen, Tab};
     use crate::token::PhrasingHtmlContent::Italic;
     use MarkdownToken::{CurveBracketClose, CurveBracketOpen};
 
@@ -447,6 +482,45 @@ mod markdown_parser_tests {
                 content: vec![ParagraphPlainText(vec![b'e'])],
             },
         ])];
+        assert_eq!(token, expected_token);
+    }
+
+    #[test]
+    fn test_unordered_list_correct() {
+        let mut parser =
+            HtmlParser::new(vec![Dash, PlainText(b'h'), Newline, Dash, PlainText(b'e')]);
+        let token = parser.parse();
+        let expected_token = vec![UnorderedList(vec![
+            UnorderedListItem {
+                content: vec![ParagraphPlainText(vec![b'h'])],
+                children: Box::new(vec![]),
+            },
+            UnorderedListItem {
+                content: vec![ParagraphPlainText(vec![b'e'])],
+                children: Box::new(vec![]),
+            },
+        ])];
+        assert_eq!(token, expected_token);
+    }
+
+    #[test]
+    fn test_unordered_child_list_correct() {
+        let mut parser = HtmlParser::new(vec![
+            Dash,
+            PlainText(b'h'),
+            Newline,
+            Tab,
+            Dash,
+            PlainText(b'e'),
+        ]);
+        let token = parser.parse();
+        let expected_token = vec![UnorderedList(vec![UnorderedListItem {
+            content: vec![ParagraphPlainText(vec![b'h'])],
+            children: Box::new(vec![UnorderedListItem {
+                content: vec![ParagraphPlainText(vec![b'e'])],
+                children: Box::new(vec![]),
+            }]),
+        }])];
         assert_eq!(token, expected_token);
     }
 }

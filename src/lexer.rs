@@ -126,7 +126,6 @@ impl Lexer {
 pub fn tokenize(input: Vec<u8>) -> MarkdownInformation {
     let mut lexer = Lexer::new(input);
     let mut tokens: Vec<MarkdownToken> = Vec::new();
-    //todo - identify if '---' fence exists before doing continuing the lexer for markdown
     loop {
         match lexer.current() {
             None => {
@@ -220,8 +219,12 @@ pub fn tokenize(input: Vec<u8>) -> MarkdownInformation {
                 lexer.advance();
             }
             Some(b'-') => {
-                if let Some(MarkdownToken::Newline) = tokens.last() {
+                if let Some(b' ') = lexer.peek()
+                    && (Some(&MarkdownToken::Tab) == tokens.last()
+                        || Some(&MarkdownToken::Newline) == tokens.last())
+                {
                     tokens.push(MarkdownToken::Dash);
+                    lexer.advance(); // move one for ' '
                 } else {
                     tokens.push(PlainText(b'-'));
                 }
@@ -244,7 +247,7 @@ pub fn tokenize(input: Vec<u8>) -> MarkdownInformation {
                 lexer.advance();
             }
             Some(i @ b'0'..=b'9') => {
-                if  lexer.peek() == Some(b'.') || lexer.peek() == Some(b')') {
+                if lexer.peek() == Some(b'.') || lexer.peek() == Some(b')') {
                     tokens.push(MarkdownToken::Number(i));
                     lexer.advance();
                     lexer.advance();
@@ -269,7 +272,7 @@ pub fn tokenize(input: Vec<u8>) -> MarkdownInformation {
 mod tokenize_tests {
     use super::*;
     use crate::token::MarkdownToken::{
-        BackTick, CurveBracketClose, CurveBracketOpen, Number, PlainText,
+        BackTick, CurveBracketClose, CurveBracketOpen, Dash, Newline, Number, PlainText, Tab,
     };
 
     #[test]
@@ -415,9 +418,48 @@ def("
         2.e"
         .as_bytes()
         .to_vec();
-        let expected_output = vec![Number(b'1'), PlainText(b' '), PlainText(b'h'), Number(b'2'), PlainText(b'e')];
+        let expected_output = vec![
+            Number(b'1'),
+            PlainText(b' '),
+            PlainText(b'h'),
+            Number(b'2'),
+            PlainText(b'e'),
+        ];
         let info = tokenize(input);
         assert_eq!(info.tokens.len(), 5);
+        assert_eq!(info.tokens, expected_output);
+    }
+
+    #[test]
+    fn tokenize_unordered_list() {
+        let input = "\n- y\n- n".as_bytes().to_vec();
+        let expected_output = vec![
+            Newline,
+            Dash,
+            PlainText(b'y'),
+            Newline,
+            Dash,
+            PlainText(b'n'),
+        ];
+        let info = tokenize(input);
+        assert_eq!(info.tokens.len(), 6);
+        assert_eq!(info.tokens, expected_output);
+    }
+
+    #[test]
+    fn tokenize_unordered_list_with_child_list() {
+        let input = "\n- y\n\t- n".as_bytes().to_vec();
+        let expected_output = vec![
+            Newline,
+            Dash,
+            PlainText(b'y'),
+            Newline,
+            Tab,
+            Dash,
+            PlainText(b'n'),
+        ];
+        let info = tokenize(input);
+        assert_eq!(info.tokens.len(), 7);
         assert_eq!(info.tokens, expected_output);
     }
 }

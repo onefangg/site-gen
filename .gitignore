@@ -4,3 +4,4 @@
 template/**.html
 *.html
 !README.md
+output/**.html

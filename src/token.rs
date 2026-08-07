@@ -71,6 +71,14 @@ pub struct OrderedListItem {
     pub(crate) content: Vec<PhrasingHtmlContent>,
 }
 
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct UnorderedListItem {
+    pub(crate) content: Vec<PhrasingHtmlContent>,
+    // this should be pointing to another UnorderedList Instead
+    pub(crate) children: Box<Vec<UnorderedListItem>>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum HtmlToken {
     Heading1(Vec<u8>),
@@ -84,7 +92,8 @@ pub enum HtmlToken {
     Paragraph(Vec<PhrasingHtmlContent>),
     Article(Vec<HtmlToken>), // unused for now
     BlockQuote(Vec<PhrasingHtmlContent>),
-    OrderedList(Vec<OrderedListItem>)
+    OrderedList(Vec<OrderedListItem>),
+    UnorderedList(Vec<UnorderedListItem>),
 }
 
 impl HtmlToken {
